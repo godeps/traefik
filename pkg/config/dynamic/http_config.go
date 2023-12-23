@@ -49,6 +49,7 @@ type Service struct {
 	Weighted     *WeightedRoundRobin  `json:"weighted,omitempty" toml:"weighted,omitempty" yaml:"weighted,omitempty" label:"-" export:"true"`
 	Mirroring    *Mirroring           `json:"mirroring,omitempty" toml:"mirroring,omitempty" yaml:"mirroring,omitempty" label:"-" export:"true"`
 	Failover     *Failover            `json:"failover,omitempty" toml:"failover,omitempty" yaml:"failover,omitempty" label:"-" export:"true"`
+	Discovery    *ServersLoadBalancer `json:"discovery,omitempty" toml:"discovery,omitempty" yaml:"discovery,omitempty" label:"-" export:"true"`
 }
 
 // +k8s:deepcopy-gen=true

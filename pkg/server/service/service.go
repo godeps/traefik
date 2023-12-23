@@ -24,6 +24,7 @@ import (
 	"github.com/traefik/traefik/v3/pkg/safe"
 	"github.com/traefik/traefik/v3/pkg/server/cookie"
 	"github.com/traefik/traefik/v3/pkg/server/provider"
+	"github.com/traefik/traefik/v3/pkg/server/service/loadbalancer/discovery"
 	"github.com/traefik/traefik/v3/pkg/server/service/loadbalancer/failover"
 	"github.com/traefik/traefik/v3/pkg/server/service/loadbalancer/mirror"
 	"github.com/traefik/traefik/v3/pkg/server/service/loadbalancer/wrr"
@@ -124,6 +125,13 @@ func (m *Manager) BuildHTTP(rootCtx context.Context, serviceName string) (http.H
 	case conf.Failover != nil:
 		var err error
 		lb, err = m.getFailoverServiceHandler(ctx, serviceName, conf.Failover)
+		if err != nil {
+			conf.AddError(err, true)
+			return nil, err
+		}
+	case conf.Discovery != nil:
+		var err error
+		lb, err = m.getLoadBalancerServiceHandler(ctx, serviceName, conf)
 		if err != nil {
 			conf.AddError(err, true)
 			return nil, err
@@ -247,6 +255,16 @@ func (m *Manager) getWRRServiceHandler(ctx context.Context, serviceName string, 
 	}
 
 	return balancer, nil
+}
+
+func (m *Manager) getDiscoveryServiceHandler(ctx context.Context, serviceName string, info *runtime.ServiceInfo) (http.Handler, error) {
+	if info.Discovery == nil {
+		return nil, fmt.Errorf("runtime.ServiceInfo.Discovery is nil")
+	}
+
+	backendServiceName := info.Discovery.ServersTransport
+
+	return discovery.New(nil, serviceName, backendServiceName, info.Discovery.Servers)
 }
 
 func (m *Manager) getLoadBalancerServiceHandler(ctx context.Context, serviceName string, info *runtime.ServiceInfo) (http.Handler, error) {

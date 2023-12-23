@@ -1228,6 +1228,11 @@ func (in *Service) DeepCopyInto(out *Service) {
 		*out = new(Failover)
 		(*in).DeepCopyInto(*out)
 	}
+	if in.Discovery != nil {
+		in, out := &in.Discovery, &out.Discovery
+		*out = new(ServersLoadBalancer)
+		(*in).DeepCopyInto(*out)
+	}
 	return
 }
 
