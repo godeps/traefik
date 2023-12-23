@@ -46,18 +46,12 @@ func NewMockDiscovery(appName string) *MockDiscovery {
 	return &MockDiscovery{appName: appName}
 }
 
-func (m MockDiscovery) PickService(ctx context.Context, serviceName string) (*ServiceInstance, error) {
+func (m MockDiscovery) PickService(ctx context.Context, serviceName string) (string, error) {
 	if serviceName != m.appName {
-		return nil, fmt.Errorf("cannot found serviceName:%s", serviceName)
+		return "", fmt.Errorf("cannot found serviceName:%s", serviceName)
 	}
-	out := &ServiceInstance{
-		ID:        "1",
-		Name:      "my-mock",
-		Version:   "v1",
-		Metadata:  nil,
-		Endpoints: []string{"http://127.0.0.1:12007"},
-	}
-	return out, nil
+
+	return "http://127.0.0.1:12007", nil
 }
 
 func TestHandler(t *testing.T) {
@@ -116,5 +110,4 @@ func TestHandler(t *testing.T) {
 			assert.Equal(t, result, string(data))
 		})
 	}
-
 }

@@ -452,6 +452,21 @@ func (in *HTTPConfiguration) DeepCopyInto(out *HTTPConfiguration) {
 			(*out)[key] = outVal
 		}
 	}
+	if in.ServersTransports != nil {
+		in, out := &in.ServersTransports, &out.ServersTransports
+		*out = make(map[string]*ServersTransport, len(*in))
+		for key, val := range *in {
+			var outVal *ServersTransport
+			if val == nil {
+				(*out)[key] = nil
+			} else {
+				in, out := &val, &outVal
+				*out = new(ServersTransport)
+				(*in).DeepCopyInto(*out)
+			}
+			(*out)[key] = outVal
+		}
+	}
 	return
 }
 

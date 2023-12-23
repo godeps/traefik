@@ -263,10 +263,52 @@ func (m *Manager) getDiscoveryServiceHandler(ctx context.Context, serviceName st
 		return nil, fmt.Errorf("runtime.ServiceInfo.Discovery is nil")
 	}
 
-	backendServiceName := info.Discovery.ServersTransport
-	log.Ctx(ctx).Debug().Str("backendServiceName", backendServiceName).Msg("start new discovery service")
+	service := info.Discovery
 
-	return discovery.New(nil, serviceName, backendServiceName, info.Discovery.Servers)
+	logger := log.Ctx(ctx)
+	logger.Debug().Msg("Creating load-balancer")
+
+	// TODO: should we keep this config value as Go is now handling stream response correctly?
+	flushInterval := dynamic.DefaultFlushInterval
+	if service.ResponseForwarding != nil {
+		flushInterval = service.ResponseForwarding.FlushInterval
+	}
+
+	if len(service.ServersTransport) > 0 {
+		service.ServersTransport = provider.GetQualifiedName(ctx, service.ServersTransport)
+	}
+
+	if service.Sticky != nil && service.Sticky.Cookie != nil {
+		service.Sticky.Cookie.Name = cookie.GetName(service.Sticky.Cookie.Name, serviceName)
+	}
+
+	// We make sure that the PassHostHeader value is defined to avoid panics.
+	passHostHeader := dynamic.DefaultPassHostHeader
+	if service.PassHostHeader != nil {
+		passHostHeader = *service.PassHostHeader
+	}
+
+	roundTripper, err := m.roundTripperManager.Get(service.ServersTransport)
+	if err != nil {
+		return nil, err
+	}
+
+	transRule := info.Discovery.TransRule
+
+	log.Ctx(ctx).Debug().Str("backendServiceName", transRule).Msg("start new discovery service")
+
+	dc, err := discovery.New(nil, serviceName, transRule, info.Discovery.Servers)
+	if err != nil {
+		return nil, err
+	}
+
+	var metricsRegistry metrics.Registry
+	if m.metricsRegistry != nil && m.metricsRegistry.IsSvcEnabled() {
+		metricsRegistry = m.metricsRegistry
+	}
+	dc.SetProxyParams(passHostHeader, time.Duration(flushInterval), roundTripper, nil, metricsRegistry)
+
+	return dc, nil
 }
 
 func (m *Manager) getLoadBalancerServiceHandler(ctx context.Context, serviceName string, info *runtime.ServiceInfo) (http.Handler, error) {
