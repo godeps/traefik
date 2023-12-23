@@ -16,30 +16,13 @@ import (
 	"github.com/traefik/traefik/v3/pkg/server/service/loadbalancer/wrr"
 )
 
-// ServiceInstance is an instance of a service in a discovery system.
-type ServiceInstance struct {
-	// ID is the unique instance ID as registered.
-	ID string `json:"id"`
-	// Name is the service name as registered.
-	Name string `json:"name"`
-	// Version is the version of the compiled.
-	Version string `json:"version"`
-	// Metadata is the kv pair metadata associated with the service instance.
-	Metadata map[string]string `json:"metadata"`
-	// Endpoints are endpoint addresses of the service instance.
-	// schema:
-	//   http://127.0.0.1:8000?isSecure=false
-	//   grpc://127.0.0.1:9000?isSecure=false
-	Endpoints []string `json:"endpoints"`
-}
-
 // Discovery is service discovery.
 type Discovery interface {
 	// GetService return the service instances in memory according to the service name.
 	//GetService(ctx context.Context, serviceName string) ([]*ServiceInstance, error)
 
 	// PickService return the service instances in memory according to the service name.
-	PickService(ctx context.Context, serviceName string) (*ServiceInstance, error)
+	PickService(ctx context.Context, serviceName string) (string, error)
 }
 
 var defaultDC Discovery
@@ -116,8 +99,13 @@ func (b *DiscoveryBalancer) ServeHTTP(w http.ResponseWriter, req *http.Request) 
 		realName = matcherValue
 	}
 
+	if b.dc == nil {
+		http.Error(w, "discovery service is not configured", http.StatusInternalServerError)
+		return
+	}
+
 	realName = strings.Replace(realName, "/", "", -1)
-	serviceInfo, err := b.dc.PickService(req.Context(), realName)
+	endpoint, err := b.dc.PickService(req.Context(), realName)
 	if err != nil {
 		log.Ctx(req.Context()).Error().Msgf("PickService [%s] failed. err:%v", realName, err)
 		//  have some backup servers ,we can try
@@ -127,16 +115,13 @@ func (b *DiscoveryBalancer) ServeHTTP(w http.ResponseWriter, req *http.Request) 
 		}
 	}
 
-	var endpoint string
-	if serviceInfo == nil || len(serviceInfo.Endpoints) == 0 {
+	if endpoint == "" {
 		log.Ctx(req.Context()).Error().Msgf("PickService [%s] is not available. err:%v", realName, errNoAvailableServer)
 		if len(b.servers) == 0 {
 			http.Error(w, errNoAvailableServer.Error(), http.StatusServiceUnavailable)
 			return
 		}
 		endpoint = b.servers[0].URL
-	} else {
-		endpoint = serviceInfo.Endpoints[0]
 	}
 
 	u, err := url.Parse(endpoint)

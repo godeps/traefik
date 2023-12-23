@@ -264,6 +264,7 @@ func (m *Manager) getDiscoveryServiceHandler(ctx context.Context, serviceName st
 	}
 
 	backendServiceName := info.Discovery.ServersTransport
+	log.Ctx(ctx).Debug().Str("backendServiceName", backendServiceName).Msg("start new discovery service")
 
 	return discovery.New(nil, serviceName, backendServiceName, info.Discovery.Servers)
 }
