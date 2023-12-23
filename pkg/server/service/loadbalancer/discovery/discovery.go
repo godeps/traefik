@@ -177,9 +177,8 @@ func (b *DiscoveryBalancer) ServeHTTP(w http.ResponseWriter, req *http.Request) 
 		return
 	}
 
-	log.Ctx(req.Context()).Debug().Msgf("target: %s", target)
+	log.Ctx(req.Context()).Debug().Msgf("target: %s", target.String())
 	proxy := buildSingleHostProxy(target, b.passHostHeader, b.flushInterval, b.roundTripper, nil)
-
 	proxy = accesslog.NewFieldHandler(proxy, accesslog.ServiceURL, target.String(), nil)
 	proxy = accesslog.NewFieldHandler(proxy, accesslog.ServiceAddr, target.Host, nil)
 	proxy = accesslog.NewFieldHandler(proxy, accesslog.ServiceName, b.serviceName, accesslog.AddServiceFields)
