@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/containous/alice"
+	"github.com/natefinch/lumberjack"
 	"github.com/rs/zerolog/log"
 	"github.com/sirupsen/logrus"
 	ptypes "github.com/traefik/paerser/types"
@@ -145,19 +146,29 @@ func NewHandler(config *types.AccessLog) (*Handler, error) {
 	return logHandler, nil
 }
 
-func openAccessLogFile(filePath string) (*os.File, error) {
+func openAccessLogFile(filePath string) (io.WriteCloser, error) {
 	dir := filepath.Dir(filePath)
 
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return nil, fmt.Errorf("failed to create log path %s: %w", dir, err)
 	}
 
-	file, err := os.OpenFile(filePath, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0o664)
-	if err != nil {
-		return nil, fmt.Errorf("error opening file %s: %w", filePath, err)
+	//file, err := os.OpenFile(filePath, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0o664)
+	//if err != nil {
+	//	return nil, fmt.Errorf("error opening file %s: %w", filePath, err)
+	//}
+
+	var w io.WriteCloser = os.Stderr
+	_, _ = os.Create(filePath)
+	w = &lumberjack.Logger{
+		Filename:   filePath,
+		MaxSize:    512,
+		MaxBackups: 3,
+		MaxAge:     3,
+		Compress:   false,
 	}
 
-	return file, nil
+	return w, nil
 }
 
 // GetLogData gets the request context object that contains logging data.
