@@ -4,8 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/trace"
 	"io"
 	"net"
 	"net/http"
@@ -22,6 +20,7 @@ import (
 	metricsMiddle "github.com/traefik/traefik/v3/pkg/middlewares/metrics"
 	"github.com/traefik/traefik/v3/pkg/rules"
 	"github.com/traefik/traefik/v3/pkg/server/service/loadbalancer/wrr"
+	"github.com/traefik/traefik/v3/pkg/tracing"
 	"golang.org/x/net/http/httpguts"
 )
 
@@ -191,13 +190,11 @@ func (b *DiscoveryBalancer) ServeHTTP(w http.ResponseWriter, req *http.Request) 
 	}
 
 	b.bl.Add(b.serviceName, proxy, nil)
+	span := tracing.GetSpan(req)
 
-	span := trace.SpanFromContext(req.Context())
-	span.SetAttributes(
-		attribute.Key("backend.endpoint").String(endpoint),
-		attribute.Key("backend.url").String(targetStr),
-		attribute.Key("backend.service").String(realName),
-	)
+	span.SetTag("backend.endpoint", endpoint)
+	span.SetTag("backend.url", targetStr)
+	span.SetTag("backend.service", realName)
 
 	b.bl.ServeHTTP(w, req)
 }
