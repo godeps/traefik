@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	"io"
 	"net"
 	"net/http"
@@ -177,9 +179,10 @@ func (b *DiscoveryBalancer) ServeHTTP(w http.ResponseWriter, req *http.Request) 
 		return
 	}
 
-	log.Ctx(req.Context()).Debug().Msgf("target: %s", target.String())
+	targetStr := target.String()
+	log.Ctx(req.Context()).Debug().Msgf("target: %s", targetStr)
 	proxy := buildSingleHostProxy(target, b.passHostHeader, b.flushInterval, b.roundTripper, nil)
-	proxy = accesslog.NewFieldHandler(proxy, accesslog.ServiceURL, target.String(), nil)
+	proxy = accesslog.NewFieldHandler(proxy, accesslog.ServiceURL, targetStr, nil)
 	proxy = accesslog.NewFieldHandler(proxy, accesslog.ServiceAddr, target.Host, nil)
 	proxy = accesslog.NewFieldHandler(proxy, accesslog.ServiceName, b.serviceName, accesslog.AddServiceFields)
 
@@ -188,6 +191,9 @@ func (b *DiscoveryBalancer) ServeHTTP(w http.ResponseWriter, req *http.Request) 
 	}
 
 	b.bl.Add(b.serviceName, proxy, nil)
+
+	span := trace.SpanFromContext(req.Context())
+	span.SetAttributes(attribute.Key("backend.endpoint").String(targetStr))
 
 	b.bl.ServeHTTP(w, req)
 }
