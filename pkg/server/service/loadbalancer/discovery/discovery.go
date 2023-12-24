@@ -193,7 +193,11 @@ func (b *DiscoveryBalancer) ServeHTTP(w http.ResponseWriter, req *http.Request) 
 	b.bl.Add(b.serviceName, proxy, nil)
 
 	span := trace.SpanFromContext(req.Context())
-	span.SetAttributes(attribute.Key("backend.endpoint").String(targetStr))
+	span.SetAttributes(
+		attribute.Key("backend.endpoint").String(endpoint),
+		attribute.Key("backend.url").String(targetStr),
+		attribute.Key("backend.service").String(realName),
+	)
 
 	b.bl.ServeHTTP(w, req)
 }
