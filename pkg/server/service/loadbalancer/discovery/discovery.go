@@ -192,6 +192,18 @@ func (b *DiscoveryBalancer) ServeHTTP(w http.ResponseWriter, req *http.Request) 
 	b.bl.Add(b.serviceName, proxy, nil)
 	span := tracing.GetSpan(req)
 
+	const MDPrefix = "X-Md-Global-"
+	if req.Header != nil {
+		for k, _ := range req.Header {
+			if strings.HasPrefix(k, MDPrefix) {
+				key := strings.Replace(k, MDPrefix, "", -1)
+				key = strings.Replace(key, "-", ".", -1)
+				key = strings.ToLower(key)
+				span.SetTag(key, req.Header.Get(k))
+			}
+		}
+	}
+	
 	span.SetTag("backend.endpoint", endpoint)
 	span.SetTag("backend.url", targetStr)
 	span.SetTag("backend.service", realName)
