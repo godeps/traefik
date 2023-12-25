@@ -68,6 +68,10 @@ const StatusClientClosedRequest = 499
 // StatusClientClosedRequestText non-standard HTTP status for client disconnection.
 const StatusClientClosedRequestText = "Client Closed Request"
 
+const MetadataPrefix = "x-md-global-"
+const HeaderRequestId = "request-id"
+const AccessLogRequestId = "RequestId"
+
 func New(sticky *dynamic.Sticky, serviceName string, transRule string, servers []dynamic.Server) (*DiscoveryBalancer, error) {
 	if defaultDC == nil && len(servers) == 0 {
 		return nil, fmt.Errorf("cannot found default discovery service")
@@ -189,24 +193,31 @@ func (b *DiscoveryBalancer) ServeHTTP(w http.ResponseWriter, req *http.Request) 
 		proxy = metricsMiddle.NewServiceMiddleware(req.Context(), proxy, b.metricsRegistry, b.serviceName)
 	}
 
-	b.bl.Add(b.serviceName, proxy, nil)
 	span := tracing.GetSpan(req)
-
-	const MDPrefix = "X-Md-Global-"
-	if req.Header != nil {
-		for k, _ := range req.Header {
-			if strings.HasPrefix(k, MDPrefix) {
-				key := strings.Replace(k, MDPrefix, "", -1)
-				key = strings.Replace(key, "-", ".", -1)
-				key = strings.ToLower(key)
-				span.SetTag(key, req.Header.Get(k))
-			}
-		}
-	}
-	
 	span.SetTag("backend.endpoint", endpoint)
 	span.SetTag("backend.url", targetStr)
 	span.SetTag("backend.service", realName)
+
+	if req.Header != nil {
+		for k, _ := range req.Header {
+			lowerKey := strings.ToLower(k)
+			if !strings.HasPrefix(lowerKey, MetadataPrefix) {
+				continue
+			}
+			_, key, ok := strings.Cut(lowerKey, MetadataPrefix)
+			if !ok {
+				continue
+			}
+
+			if strings.Contains(key, HeaderRequestId) {
+				proxy = accesslog.NewFieldHandler(proxy, AccessLogRequestId, req.Header.Get(k), accesslog.AddServiceFields)
+			}
+
+			span.SetTag(strings.Replace(key, "-", ".", -1), req.Header.Get(k))
+		}
+	}
+
+	b.bl.Add(b.serviceName, proxy, nil)
 
 	b.bl.ServeHTTP(w, req)
 }
