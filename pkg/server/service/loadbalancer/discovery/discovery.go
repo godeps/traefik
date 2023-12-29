@@ -19,7 +19,6 @@ import (
 	"github.com/traefik/traefik/v3/pkg/middlewares/accesslog"
 	metricsMiddle "github.com/traefik/traefik/v3/pkg/middlewares/metrics"
 	"github.com/traefik/traefik/v3/pkg/rules"
-	"github.com/traefik/traefik/v3/pkg/server/service/loadbalancer/wrr"
 	"github.com/traefik/traefik/v3/pkg/tracing"
 	"golang.org/x/net/http/httpguts"
 )
@@ -45,7 +44,7 @@ type DiscoveryBalancer struct {
 	dc          Discovery
 	serviceName string
 	servers     []dynamic.Server
-	bl          *wrr.Balancer
+	sticky      *dynamic.Sticky
 	tree        *rules.Tree
 	reg         *regexp.Regexp
 
@@ -99,7 +98,7 @@ func New(sticky *dynamic.Sticky, serviceName string, transRule string, servers [
 		dc:             defaultDC,
 		serviceName:    serviceName,
 		servers:        servers,
-		bl:             wrr.New(sticky, false),
+		sticky:         sticky,
 		tree:           tree,
 		passHostHeader: true,
 		flushInterval:  time.Duration(dynamic.DefaultFlushInterval),
@@ -217,9 +216,11 @@ func (b *DiscoveryBalancer) ServeHTTP(w http.ResponseWriter, req *http.Request) 
 		}
 	}
 
-	b.bl.Add(b.serviceName, proxy, nil)
+	//bl := wrr.New(b.sticky, false)
+	//bl.Add(b.serviceName, proxy, nil)
+	//bl.ServeHTTP(w, req)
 
-	b.bl.ServeHTTP(w, req)
+	proxy.ServeHTTP(w, req)
 }
 
 func buildSingleHostProxy(target *url.URL, passHostHeader bool, flushInterval time.Duration, roundTripper http.RoundTripper, bufferPool httputil.BufferPool) http.Handler {
