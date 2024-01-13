@@ -245,12 +245,10 @@ func (h *Handler) ServeHTTP(rw http.ResponseWriter, req *http.Request, next http
 
 	const requestIdHeaderKey = "x-md-global-request-id"
 	requestId := req.Header.Get(requestIdHeaderKey)
-	if requestId != "" {
+	if requestId == "" {
 		requestId = uuid.NewString()
 	}
 	logDataTable.Core["RequestId"] = requestId
-
-	reqWithDataTable.Response.Header.Set(requestIdHeaderKey, requestId)
 
 	ctx := req.Context()
 	capt, err := capture.FromContext(ctx)
@@ -263,6 +261,9 @@ func (h *Handler) ServeHTTP(rw http.ResponseWriter, req *http.Request, next http
 	next.ServeHTTP(br, reqWithDataTable)
 
 	logDataTable.Core[AccessLogBody] = br.getText()
+	if rw.Header() != nil {
+		rw.Header().Set(requestIdHeaderKey, requestId)
+	}
 
 	if _, ok := core[ClientUsername]; !ok {
 		core[ClientUsername] = usernameIfPresent(reqWithDataTable.URL)
