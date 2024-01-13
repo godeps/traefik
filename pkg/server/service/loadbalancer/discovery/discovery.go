@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 	"github.com/traefik/traefik/v3/pkg/config/dynamic"
 	"github.com/traefik/traefik/v3/pkg/metrics"
@@ -20,6 +21,7 @@ import (
 	metricsMiddle "github.com/traefik/traefik/v3/pkg/middlewares/metrics"
 	"github.com/traefik/traefik/v3/pkg/rules"
 	"github.com/traefik/traefik/v3/pkg/tracing"
+	otelTrace "go.opentelemetry.io/otel/trace"
 	"golang.org/x/net/http/httpguts"
 )
 
@@ -70,6 +72,7 @@ const StatusClientClosedRequestText = "Client Closed Request"
 const MetadataPrefix = "x-md-global-"
 const HeaderRequestId = "request-id"
 const AccessLogRequestId = "RequestId"
+const AccessLogTraceId = "TraceId"
 
 func New(sticky *dynamic.Sticky, serviceName string, transRule string, servers []dynamic.Server) (*DiscoveryBalancer, error) {
 	if defaultDC == nil && len(servers) == 0 {
@@ -142,22 +145,20 @@ func (b *DiscoveryBalancer) ServeHTTP(w http.ResponseWriter, req *http.Request) 
 
 	realName = strings.Replace(realName, "/", "", -1)
 	endpoint, err := b.dc.PickService(req.Context(), realName)
-	if err != nil {
+	if err != nil && len(b.servers) == 0 {
 		log.Ctx(req.Context()).Error().Msgf("PickService [%s] failed. err:%v", realName, err)
-		//  have some backup servers ,we can try
-		if len(b.servers) == 0 {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
+		http.Error(w, "unknown service", http.StatusInternalServerError)
+		return
 	}
 
 	if endpoint == "" {
-		log.Ctx(req.Context()).Error().Msgf("PickService [%s] is not available. err:%v", realName, errNoAvailableServer)
-		if len(b.servers) == 0 {
+		if len(b.servers) == 0 || b.servers[0].URL == "" {
+			log.Ctx(req.Context()).Error().Msgf("PickService [%s] is not available. err:%v", realName, errNoAvailableServer)
 			http.Error(w, errNoAvailableServer.Error(), http.StatusServiceUnavailable)
 			return
 		}
 
+		log.Ctx(req.Context()).Warn().Msgf("PickService [%s] is not available. err:%v", realName, errNoAvailableServer)
 		endpoint = b.servers[0].URL
 		log.Ctx(req.Context()).Debug().Msgf("discovery endpoint failed. use default endpoint: %s", endpoint)
 	}
@@ -186,17 +187,20 @@ func (b *DiscoveryBalancer) ServeHTTP(w http.ResponseWriter, req *http.Request) 
 	proxy := buildSingleHostProxy(target, b.passHostHeader, b.flushInterval, b.roundTripper, nil)
 	proxy = accesslog.NewFieldHandler(proxy, accesslog.ServiceURL, targetStr, nil)
 	proxy = accesslog.NewFieldHandler(proxy, accesslog.ServiceAddr, target.Host, nil)
-	proxy = accesslog.NewFieldHandler(proxy, accesslog.ServiceName, b.serviceName, accesslog.AddServiceFields)
+	proxy = accesslog.NewFieldHandler(proxy, accesslog.ServiceName, b.serviceName, nil)
 
 	if b.metricsRegistry != nil {
 		proxy = metricsMiddle.NewServiceMiddleware(req.Context(), proxy, b.metricsRegistry, b.serviceName)
 	}
 
 	span := tracing.GetSpan(req)
-	span.SetTag("backend.endpoint", endpoint)
-	span.SetTag("backend.url", targetStr)
-	span.SetTag("backend.service", realName)
+	if span != nil {
+		span.SetTag("backend.endpoint", endpoint)
+		span.SetTag("backend.url", targetStr)
+		span.SetTag("backend.service", realName)
+	}
 
+	var requestId string
 	if req.Header != nil {
 		for k, _ := range req.Header {
 			lowerKey := strings.ToLower(k)
@@ -209,12 +213,27 @@ func (b *DiscoveryBalancer) ServeHTTP(w http.ResponseWriter, req *http.Request) 
 			}
 
 			if strings.Contains(key, HeaderRequestId) {
-				proxy = accesslog.NewFieldHandler(proxy, AccessLogRequestId, req.Header.Get(k), accesslog.AddServiceFields)
+				requestId = req.Header.Get(k)
 			}
 
-			span.SetTag(strings.Replace(key, "-", ".", -1), req.Header.Get(k))
+			if span != nil {
+				span.SetTag(strings.Replace(key, "-", ".", -1), req.Header.Get(k))
+			}
 		}
 	}
+
+	traceId := getTraceID(req.Context())
+	if requestId == "" {
+		if traceId != "" {
+			requestId = traceId
+		} else {
+			requestId = uuid.NewString()
+		}
+		req.Header.Set(MetadataPrefix+HeaderRequestId, requestId)
+	}
+
+	proxy = accesslog.NewFieldHandler(proxy, AccessLogTraceId, traceId, nil)
+	proxy = accesslog.NewFieldHandler(proxy, AccessLogRequestId, requestId, accesslog.AddServiceFields)
 
 	//bl := wrr.New(b.sticky, false)
 	//bl.Add(b.serviceName, proxy, nil)
@@ -328,4 +347,12 @@ func statusText(statusCode int) string {
 		return StatusClientClosedRequestText
 	}
 	return http.StatusText(statusCode)
+}
+
+// TraceID returns a trace id valuer.
+func getTraceID(ctx context.Context) string {
+	if span := otelTrace.SpanContextFromContext(ctx); span.HasTraceID() {
+		return span.TraceID().String()
+	}
+	return ""
 }

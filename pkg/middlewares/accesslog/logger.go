@@ -249,7 +249,10 @@ func (h *Handler) ServeHTTP(rw http.ResponseWriter, req *http.Request, next http
 		return
 	}
 
-	next.ServeHTTP(rw, reqWithDataTable)
+	br := newBodyRecorder(rw, 0)
+	next.ServeHTTP(br, reqWithDataTable)
+
+	logDataTable.Core[AccessLogBody] = br.getText()
 
 	if _, ok := core[ClientUsername]; !ok {
 		core[ClientUsername] = usernameIfPresent(reqWithDataTable.URL)
