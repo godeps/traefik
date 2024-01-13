@@ -13,7 +13,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 	"github.com/traefik/traefik/v3/pkg/config/dynamic"
 	"github.com/traefik/traefik/v3/pkg/metrics"
@@ -200,40 +199,40 @@ func (b *DiscoveryBalancer) ServeHTTP(w http.ResponseWriter, req *http.Request) 
 		span.SetTag("backend.service", realName)
 	}
 
-	var requestId string
-	if req.Header != nil {
-		for k, _ := range req.Header {
-			lowerKey := strings.ToLower(k)
-			if !strings.HasPrefix(lowerKey, MetadataPrefix) {
-				continue
-			}
-			_, key, ok := strings.Cut(lowerKey, MetadataPrefix)
-			if !ok {
-				continue
-			}
+	//var requestId string
+	//if req.Header != nil {
+	//	for k, _ := range req.Header {
+	//		lowerKey := strings.ToLower(k)
+	//		if !strings.HasPrefix(lowerKey, MetadataPrefix) {
+	//			continue
+	//		}
+	//		_, key, ok := strings.Cut(lowerKey, MetadataPrefix)
+	//		if !ok {
+	//			continue
+	//		}
+	//
+	//		if strings.Contains(key, HeaderRequestId) {
+	//			requestId = req.Header.Get(k)
+	//		}
+	//
+	//		if span != nil {
+	//			span.SetTag(strings.Replace(key, "-", ".", -1), req.Header.Get(k))
+	//		}
+	//	}
+	//}
 
-			if strings.Contains(key, HeaderRequestId) {
-				requestId = req.Header.Get(k)
-			}
+	//traceId := getTraceID(req.Context())
+	//if requestId == "" {
+	//	if traceId != "" {
+	//		requestId = traceId
+	//	} else {
+	//		requestId = uuid.NewString()
+	//	}
+	//	req.Header.Set(MetadataPrefix+HeaderRequestId, requestId)
+	//}
 
-			if span != nil {
-				span.SetTag(strings.Replace(key, "-", ".", -1), req.Header.Get(k))
-			}
-		}
-	}
-
-	traceId := getTraceID(req.Context())
-	if requestId == "" {
-		if traceId != "" {
-			requestId = traceId
-		} else {
-			requestId = uuid.NewString()
-		}
-		req.Header.Set(MetadataPrefix+HeaderRequestId, requestId)
-	}
-
-	proxy = accesslog.NewFieldHandler(proxy, AccessLogTraceId, traceId, nil)
-	proxy = accesslog.NewFieldHandler(proxy, AccessLogRequestId, requestId, accesslog.AddServiceFields)
+	//proxy = accesslog.NewFieldHandler(proxy, AccessLogTraceId, traceId, nil)
+	//proxy = accesslog.NewFieldHandler(proxy, AccessLogRequestId, requestId, accesslog.AddServiceFields)
 
 	//bl := wrr.New(b.sticky, false)
 	//bl.Add(b.serviceName, proxy, nil)

@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/containous/alice"
+	"github.com/google/uuid"
 	"github.com/natefinch/lumberjack"
 	"github.com/rs/zerolog/log"
 	"github.com/sirupsen/logrus"
@@ -241,6 +242,15 @@ func (h *Handler) ServeHTTP(rw http.ResponseWriter, req *http.Request, next http
 	if forwardedFor := req.Header.Get("X-Forwarded-For"); forwardedFor != "" {
 		core[ClientHost] = forwardedFor
 	}
+
+	const requestIdHeaderKey = "x-md-global-request-id"
+	requestId := req.Header.Get(requestIdHeaderKey)
+	if requestId != "" {
+		requestId = uuid.NewString()
+	}
+	logDataTable.Core["RequestId"] = requestId
+
+	reqWithDataTable.Response.Header.Set(requestIdHeaderKey, requestId)
 
 	ctx := req.Context()
 	capt, err := capture.FromContext(ctx)
