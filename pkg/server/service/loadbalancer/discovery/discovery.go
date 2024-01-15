@@ -186,7 +186,7 @@ func (b *DiscoveryBalancer) ServeHTTP(w http.ResponseWriter, req *http.Request) 
 	proxy := buildSingleHostProxy(target, b.passHostHeader, b.flushInterval, b.roundTripper, nil)
 	proxy = accesslog.NewFieldHandler(proxy, accesslog.ServiceURL, targetStr, nil)
 	proxy = accesslog.NewFieldHandler(proxy, accesslog.ServiceAddr, target.Host, nil)
-	proxy = accesslog.NewFieldHandler(proxy, accesslog.ServiceName, b.serviceName, nil)
+	proxy = accesslog.NewFieldHandler(proxy, accesslog.ServiceName, b.serviceName, accesslog.AddServiceFields)
 
 	if b.metricsRegistry != nil {
 		proxy = metricsMiddle.NewServiceMiddleware(req.Context(), proxy, b.metricsRegistry, b.serviceName)

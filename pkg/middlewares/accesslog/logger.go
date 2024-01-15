@@ -80,13 +80,25 @@ func WrapHandler(handler *Handler) alice.Constructor {
 // NewHandler creates a new Handler.
 func NewHandler(config *types.AccessLog) (*Handler, error) {
 	var file io.WriteCloser = noopCloser{os.Stdout}
+	if config.FilePath == "/dev/null" {
+		log.Warn().Msgf("access log filePath is: %s, so disable access log.", config.FilePath)
+		return &Handler{
+			config:         config,
+			logger:         nil,
+			file:           nil,
+			logHandlerChan: nil,
+		}, nil
+	}
+
 	if len(config.FilePath) > 0 {
+		log.Warn().Msgf("access log filePath is: %s.", config.FilePath)
 		f, err := openAccessLogFile(config.FilePath)
 		if err != nil {
 			return nil, fmt.Errorf("error opening access log file: %w", err)
 		}
 		file = f
 	}
+
 	logHandlerChan := make(chan handlerParams, config.BufferingSize)
 
 	var formatter logrus.Formatter
@@ -182,6 +194,10 @@ func GetLogData(req *http.Request) *LogData {
 }
 
 func (h *Handler) ServeHTTP(rw http.ResponseWriter, req *http.Request, next http.Handler) {
+	if h.logger == nil {
+		next.ServeHTTP(rw, req)
+		return
+	}
 	now := time.Now().UTC()
 
 	core := CoreLogData{

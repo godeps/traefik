@@ -7,7 +7,6 @@ import (
 	"github.com/opentracing/opentracing-go/ext"
 	"github.com/traefik/traefik/v3/pkg/logs"
 	"github.com/traefik/traefik/v3/pkg/middlewares"
-	"github.com/traefik/traefik/v3/pkg/middlewares/accesslog"
 	"github.com/traefik/traefik/v3/pkg/tracing"
 )
 
@@ -51,7 +50,7 @@ func (f *forwarderMiddleware) ServeHTTP(rw http.ResponseWriter, req *http.Reques
 	span.SetTag("http.host", req.Host)
 
 	tracing.InjectRequestHeaders(req)
-	f.next = accesslog.NewFieldHandler(f.next, "TraceId", req.Header.Get("Traceparent"), nil)
+	//f.next = accesslog.NewFieldHandler(f.next, "TraceId", req.Header.Get("Traceparent"), nil)
 
 	recorder := newStatusCodeRecorder(rw, 200)
 
